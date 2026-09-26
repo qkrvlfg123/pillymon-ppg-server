@@ -1,0 +1,9 @@
+flask
+flask-cors
+numpy
+scipy
+scikit-learn
+joblib
+gspread
+google-auth
+gunicorn

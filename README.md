@@ -7,6 +7,12 @@
 
 - 메인 레포: [qkrvlfg123/keyboard-mouse-1st-modeling](https://github.com/qkrvlfg123/keyboard-mouse-1st-modeling)
 
+## 내가 맡은 파트
+
+이 서버는 PILLYMON 팀 프로젝트(2팀 · 2026.09 ~ 11)에서 **DA(본인)가 직접 만든 파트**입니다.
+PPG 신호 처리 파이프라인, HRV 피처 추출, MAUS 기반 스트레스 판정 모델 학습, Flask 서버·구글 시트 연동까지 전부 포함합니다.
+팀 전체 구성과 다른 파트는 [메인 레포](https://github.com/qkrvlfg123/keyboard-mouse-1st-modeling)를 참고하세요.
+
 ## 스택
 
 | 구분 | 사용 기술 |
@@ -38,6 +44,13 @@
 - 개인 기준(personal z-score) 방식입니다. 그 사용자의 평상시 측정이 5회 이상 있으면 개인 평균·표준편차로 정규화합니다. 5회 미만이면 인구 통계값을 쓰는 콜드스타트로 판정합니다.
 - 점수 53 이상이면 `confirm`(스트레스)으로 판정합니다. 등급은 75 이상 `과부하`, 53 이상 `중간`, 그 미만 `저부하`입니다.
 - LOSO AUC 약 0.71로, 아직 검증 단계의 1차 모델입니다.
+
+## 데이터
+
+- **MAUS** — Beh, W.-K., Wu, Y.-H., & Wu, A.-Y. (2021). *MAUS: A Dataset for Mental Workload Assessment on N-back Task Using Wearable Sensor.* [arXiv:2111.02561](https://arxiv.org/abs/2111.02561) · 데이터: [IEEE DataPort](https://ieee-dataport.org/open-access/maus-dataset-mental-workload-assessment-n-back-task-using-wearable-sensor)
+  - 22명이 N-back 과제(난이도별 정신적 부하)를 수행하는 동안 ECG·손끝 PPG·손목 PPG·GSR을 약 35분간 기록한 공개 데이터셋입니다.
+  - 이 서버의 판정 모델은 **손끝(fingertip) PPG**에서 계산한 HRV로 학습했습니다. 스마트폰 카메라에 손가락을 대는 측정 방식과 가장 가깝기 때문입니다.
+  - 원본 데이터는 라이선스(학술 목적) 문제로 저장소에 포함하지 않고, 학습된 모델 번들(`ppg_stress_base_maus.pkl`)만 포함합니다.
 
 ## API
 

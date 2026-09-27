@@ -98,3 +98,9 @@ pip install -r requirements.txt
 export SHEET_ID=<시트 ID>            # Windows PowerShell: $env:SHEET_ID="<시트 ID>"
 python server_sheet.py               # http://localhost:5000
 ```
+
+## 알려진 한계 / 향후 개선
+
+- **현재는 콜드스타트 판정만 동작합니다.** 모든 측정이 인구 평균·표준편차 기준으로 판정됩니다(`used_reference: "coldstart"`).
+- **개인 기준 전환이 작동하지 않습니다.** 측정 페이지가 `personal_calm_hrv`를 보내지 않기 때문에, 평상시 측정이 5회 이상 쌓여도 개인 기준(`personal`)으로 바뀌지 않습니다.
+- **향후 과제는 프론트 연동입니다.** 측정 페이지가 사용자의 평상시 HRV 기록을 모아 `personal_calm_hrv`로 함께 보내도록 연동해야 합니다.

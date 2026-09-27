@@ -2,7 +2,7 @@ flask
 flask-cors
 numpy
 scipy
-scikit-learn
+scikit-learn==1.8.0
 joblib
 gspread
 google-auth

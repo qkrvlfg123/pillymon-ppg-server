@@ -74,7 +74,7 @@ def _append_sheet(row: dict):
     if ws is None:
         print("[경고] SHEET_ID 미설정 — 시트 저장 건너뜀"); return False
     ws.append_row([row.get(k, "") for k in SHEET_HEADER],
-                  value_input_option="USER_ENTERED")
+                  value_input_option="RAW")
     return True
 
 

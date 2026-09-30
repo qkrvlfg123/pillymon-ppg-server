@@ -7,7 +7,7 @@ server.py — 손가락 PPG 수집·판정 서버 (구글 시트 저장 · 클�
 네 PC를 꺼도 24시간 수집된다.
 
 [필요 파일 — 같은 폴더]
-  ppg_pipeline.py, stress_judge.py, ppg_stress_base_maus.pkl
+  ppg_pipeline.py, stress_judge.py, ppg_stress_base_maus_60s.pkl
   (구글 인증) service_account.json  ← 구글 클라우드에서 발급 (아래 설명)
 
 [환경변수]
@@ -29,15 +29,17 @@ from flask import Flask, request, jsonify
 import ppg_pipeline as pp
 try:
     from stress_judge import judge_stress
-    HAVE_MODEL = os.path.exists("ppg_stress_base_maus.pkl")
+    MODEL_FILE = "ppg_stress_base_maus_60s.pkl" if os.path.exists("ppg_stress_base_maus_60s.pkl") else "ppg_stress_base_maus.pkl"
+    HAVE_MODEL = os.path.exists(MODEL_FILE)
 except Exception:
     HAVE_MODEL = False
+    MODEL_FILE = "ppg_stress_base_maus_60s.pkl"
 
 # ── 구글 시트 연결 ─────────────────────────────────────────
 SHEET_ID = os.environ.get("SHEET_ID", "").strip()
-SHEET_HEADER = ["timestamp", "user_id", "trigger", "mean_hr", "rmssd", "sdnn",
-                "pnn50", "sd1", "score", "verdict", "grade", "used_reference",
-                "fps", "n_samples", "status", "model_version", "id"]
+SHEET_HEADER = ["timestamp", "user_id", "trigger", "self_ox", "self_level", "attempt",
+                "mean_hr", "rmssd", "sdnn", "pnn50", "sd1", "score", "verdict", "grade",
+                "used_reference", "fps", "n_samples", "status", "model_version", "id"]
 _sheet = None
 
 def _get_sheet():
@@ -117,10 +119,17 @@ def measure():
     user_id = str(data.get("user_id", "anon"))
     trigger = str(data.get("trigger", "manual"))
     calm = data.get("personal_calm_hrv")
+    # 자가보고(측정 전 O/X·1~5)·재측정 횟수
+    self_ox = data.get("self_ox")        # 1=받음 / 0=안받음 / None
+    self_level = data.get("self_level")  # 1~5 (5=매우 많이) / None
+    attempt = data.get("attempt", 1)     # 몇 번째 시도(재측정 카운트)
 
     mid = uuid.uuid4().hex[:12]
     ts = datetime.now().isoformat(timespec="seconds")
     row = {"id": mid, "user_id": user_id, "timestamp": ts, "trigger": trigger,
+           "self_ox": self_ox if self_ox is not None else "",
+           "self_level": self_level if self_level is not None else "",
+           "attempt": attempt,
            "fps": fps, "n_samples": int(wave.size)}
 
     try:
@@ -138,7 +147,7 @@ def measure():
             row[k] = round(h[k], 2) if isinstance(h.get(k), (int, float)) else ""
         if HAVE_MODEL:
             try:
-                j = judge_stress(h, "ppg_stress_base_maus.pkl", personal_calm_hrv=calm)
+                j = judge_stress(h, MODEL_FILE, personal_calm_hrv=calm)
                 row.update(score=j["score"], verdict=j["verdict"], grade=_grade(j["score"]),
                            used_reference=j["used_reference"], model_version=j["model_version"])
                 out.update(score=j["score"], verdict=j["verdict"], grade=_grade(j["score"]),

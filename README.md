@@ -5,13 +5,13 @@
 **PILLYMON**의 PPG(광용적맥파, 심박 생체신호) 처리 서버입니다.
 스마트폰 카메라에 손가락을 대고 측정한 원시 PPG 파형을 받아 HRV(심박변이도) 지표를 계산하고, 학습된 모델로 스트레스(부하) 점수를 판정한 뒤 결과를 구글 시트에 기록합니다.
 
-- 메인 레포: [qkrvlfg123/keyboard-mouse-1st-modeling](https://github.com/qkrvlfg123/keyboard-mouse-1st-modeling)
+- 메인 레포: `keyboard-mouse-1st-modeling` (PILLYMON 팀 비공개 저장소)
 
 ## 내가 맡은 파트
 
 이 서버는 PILLYMON 팀 프로젝트(2팀 · 2026.09 ~ 11)에서 **DA(본인)가 직접 만든 파트**입니다.
 PPG 신호 처리 파이프라인, HRV 피처 추출, MAUS 기반 스트레스 판정 모델 학습, Flask 서버·구글 시트 연동까지 전부 포함합니다.
-팀 전체 구성과 다른 파트는 [메인 레포](https://github.com/qkrvlfg123/keyboard-mouse-1st-modeling)를 참고하세요.
+팀 전체 구성과 다른 파트는 PILLYMON 팀 비공개 저장소(`keyboard-mouse-1st-modeling`)에서 관리합니다.
 
 ## 스택
 

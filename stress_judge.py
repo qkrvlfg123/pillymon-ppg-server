@@ -2,9 +2,8 @@
 """
 stress_judge.py — 손가락 PPG 스트레스 판정 함수
 ================================================
-※ 이 파일은 WESAD와 무관합니다. 판정에 쓰는 모델은 MAUS로 학습한
-   ppg_stress_base_maus.pkl 입니다. 이 모듈은 그 모델을 불러 점수·판정을 낼 뿐입니다.
-   (예전에는 이 함수가 wesad_train.py 안에 있어 이름이 헷갈렸어요.)
+판정에 쓰는 모델은 MAUS로 학습한 번들입니다(서버는 ppg_stress_base_maus_60s.pkl 을 우선 사용).
+이 모듈은 번들을 불러 점수·판정을 낼 뿐이며, 피처 목록·기준 확률은 번들 안의 값을 따릅니다.
 
 judge_stress(hrv, bundle_path, personal_calm_hrv):
   hrv               : ppg_pipeline.process_ppg(...)["hrv"]  (이번 측정)
@@ -37,8 +36,11 @@ def judge_stress(hrv: dict, bundle_path: str = "ppg_stress_base_maus.pkl",
         used = "absolute"
 
     p = float(b["model"].predict_proba(x.reshape(1, -1))[0, 1])
-    return {"score": round(p * 100),
-            "verdict": "confirm" if p >= b["cutoff_prob"] else "deny",
+    score = round(p * 100)
+    # 판정은 화면에 보이는 점수(정수)와 같은 기준으로 한다.
+    # 확률 원값으로 비교하면 같은 49점이 confirm 과 deny 로 갈릴 수 있다.
+    return {"score": score,
+            "verdict": "confirm" if score >= b["cutoff_score"] else "deny",
             "used_reference": used,
             "cutoff": b["cutoff_score"],
             "model_version": b["model_version"]}

@@ -4,7 +4,7 @@ server.py — 손가락 PPG 수집·판정 서버 (구글 시트 저장 · 클�
 ======================================================================
 폰이 보낸 원파형을 검증된 ppg_pipeline으로 처리해 HRV·판정을 계산하고,
 결과 한 줄을 구글 시트에 자동 저장한다. Render 등 클라우드에 올리면
-네 PC를 꺼도 24시간 수집된다.
+PC를 꺼도 계속 수집된다.
 
 [필요 파일 — 같은 폴더]
   ppg_pipeline.py, stress_judge.py, ppg_stress_base_maus_60s.pkl
@@ -12,6 +12,7 @@ server.py — 손가락 PPG 수집·판정 서버 (구글 시트 저장 · 클�
 
 [환경변수]
   SHEET_ID   : 구글 시트 문서 ID (시트 URL의 /d/ 와 /edit 사이 문자열)
+  API_KEY    : (선택) 설정하면 /measure 요청에 X-API-Key 헤더가 같아야 받는다
   GOOGLE_CREDENTIALS_JSON : (Render용) service_account.json 내용을 통째로 넣는 값
                             (로컬 테스트면 service_account.json 파일만 있어도 됨)
 
@@ -37,6 +38,12 @@ except Exception:
 
 # ── 구글 시트 연결 ─────────────────────────────────────────
 SHEET_ID = os.environ.get("SHEET_ID", "").strip()
+API_KEY = os.environ.get("API_KEY", "").strip()   # 비어 있으면 인증 없이 받는다
+
+# ── 입력 검증 기준 ─────────────────────────────────────────
+FPS_MIN, FPS_MAX = 10.0, 240.0     # 스마트폰 카메라 범위. fps가 틀리면 RR 간격 전체가 비례해서 틀어진다
+MIN_SECONDS = 30.0                 # 판정 모델은 60초 창으로 학습. 30초 미만은 판정하지 않는다
+MAX_SAMPLES = int(FPS_MAX * 600)   # 10분 분량 초과는 받지 않는다
 SHEET_HEADER = ["timestamp", "user_id", "trigger", "self_ox", "self_level", "attempt",
                 "mean_hr", "rmssd", "sdnn", "pnn50", "sd1", "score", "verdict", "grade",
                 "used_reference", "fps", "n_samples", "status", "model_version", "id"]
@@ -85,15 +92,16 @@ except Exception:
     @app.after_request
     def _cors(resp):
         resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type,ngrok-skip-browser-warning"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type,X-API-Key,ngrok-skip-browser-warning"
         resp.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
         return resp
 
 
-def _grade(score):
-    if score >= 75: return "과부하"
-    if score >= 53: return "중간"
-    return "저부하"
+def _grade(score, verdict):
+    """등급은 판정(verdict)과 같은 기준을 쓴다. 모델 번들마다 기준 점수가 달라(v3 53점, v5 49점)
+    숫자를 따로 적어 두면 '스트레스 판정인데 저부하 등급'이 나올 수 있다."""
+    if verdict != "confirm": return "저부하"
+    return "과부하" if score >= 75 else "중간"
 
 
 @app.route("/")
@@ -113,9 +121,21 @@ def health():
 
 @app.route("/measure", methods=["POST"])
 def measure():
-    data = request.get_json(force=True)
-    wave = np.asarray(data.get("waveform", []), dtype=float)
-    fps = float(data.get("fps", 30))
+    if API_KEY and request.headers.get("X-API-Key", "") != API_KEY:
+        return jsonify({"status": "error", "message": "unauthorized"}), 401
+    data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "JSON 본문이 필요합니다"}), 400
+    try:
+        wave = np.asarray(data.get("waveform", []), dtype=float).ravel()
+        fps = float(data.get("fps", 30))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "waveform과 fps는 숫자여야 합니다"}), 400
+    if not (FPS_MIN <= fps <= FPS_MAX):
+        return jsonify({"status": "error", "message": f"fps는 {FPS_MIN:g}~{FPS_MAX:g} 범위여야 합니다"}), 400
+    if wave.size > MAX_SAMPLES:
+        return jsonify({"status": "error", "message": "waveform이 너무 깁니다"}), 400
+    seconds = wave.size / fps
     user_id = str(data.get("user_id", "anon"))
     trigger = str(data.get("trigger", "manual"))
     calm = data.get("personal_calm_hrv")
@@ -131,6 +151,15 @@ def measure():
            "self_level": self_level if self_level is not None else "",
            "attempt": attempt,
            "fps": fps, "n_samples": int(wave.size)}
+
+    if seconds < MIN_SECONDS:
+        row["status"] = "too_short"
+        try:
+            _append_sheet(row)
+        except Exception:
+            pass
+        return jsonify({"status": "too_short", "id": mid, "record_seconds": round(seconds, 1),
+                        "min_seconds": MIN_SECONDS, "action": "재측정 요청"}), 200
 
     try:
         res = pp.process_ppg(wave, fps)
@@ -148,10 +177,12 @@ def measure():
         if HAVE_MODEL:
             try:
                 j = judge_stress(h, MODEL_FILE, personal_calm_hrv=calm)
-                row.update(score=j["score"], verdict=j["verdict"], grade=_grade(j["score"]),
+                grade = _grade(j["score"], j["verdict"])
+                row.update(score=j["score"], verdict=j["verdict"], grade=grade,
                            used_reference=j["used_reference"], model_version=j["model_version"])
-                out.update(score=j["score"], verdict=j["verdict"], grade=_grade(j["score"]),
-                           used_reference=j["used_reference"])
+                out.update(score=j["score"], verdict=j["verdict"], grade=grade,
+                           used_reference=j["used_reference"], model_version=j["model_version"],
+                           record_seconds=round(seconds, 1))
             except Exception as e:
                 out["model_error"] = str(e)
     else:
